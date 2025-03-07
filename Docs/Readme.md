@@ -1,4 +1,8 @@
 # Dales_tb
+## ST code change by adding these two lines.
+    ./USB_Device/App/usbd_cdc_if.c:262:void Menu(uint8_t* Buf, uint32_t Len);
+    ./USB_Device/App/usbd_cdc_if.c:268:  Menu(Buf,*Len);  // DAS added
+
 # Port pins
 ## As configured
 | Port | Pin  | Long | Named | Special | Active | Voltage | HRTIM1 |
