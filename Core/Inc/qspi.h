@@ -11,7 +11,19 @@ void qspi_indirect_write(uint8_t command);
 void qspi_read(uint32_t addr, uint8_t receiveBuffer[], uint32_t length);
 void qspi_write_page(uint32_t address, uint8_t Buffer[], uint32_t length);
 
-// QSPI
+#define CCR_PAGE_PROGRAM 0x02
+#define CCR_READ_DATA 0x03
+#define CCR_WRITE_DISABLE 0x04
+#define CCR_READ_STATUS 0x05
+#define CCR_WRITE_ENABLE 0x06
+#define CCR_SECTOR_ERASE 0x20
+#define CCR_JEDEC_ID 0x9F
+#define CCR_CHIP_ERASE 0xC7
+#define CCR_BLOCK_ERASE 0xD8
+#define CCR_FAST_READ_QUAD 0xEB
+#define FAST_READ_DUAL 0xBB
+
+// QSPI 0xA0001000
   // QUADSPI_CR 0x00
     // PRESCALER[7:0]
     // PMM: Polling match mode
@@ -106,4 +118,3 @@ void qspi_write_page(uint32_t address, uint8_t Buffer[], uint32_t length);
   // PSMAR (polling status match)
   // PIR (polling interval)
   // LPTR (low power timeout)
-
