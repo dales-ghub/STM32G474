@@ -1,7 +1,6 @@
 #include "qspi.h"
 
 // W25Q128 16 Mbyte
-// QSPI 0xA0001000
 // DATA 0x90000000-0x9FFFFFFF
 void QSPI_Init(void)
     {
@@ -103,14 +102,14 @@ void QSPI_Init(void)
 //    QUADSPI->DCR |= QUADSPI_DCR_CKMODE;
   
     QUADSPI->DLR = 0;
-
+             // Read Data
     QUADSPI->CCR = ((3 << QUADSPI_CCR_FMODE_Pos) |  // Memory-mapped mode
                     (1 << QUADSPI_CCR_DMODE_Pos) |  // Singe data
                     (0 << QUADSPI_CCR_DCYC_Pos ) |  // no delay
                     (2 << QUADSPI_CCR_ADSIZE_Pos) | // 24 bit address
                     (1 << QUADSPI_CCR_ADMODE_Pos) | // single address
                     (1 << QUADSPI_CCR_IMODE_Pos)|   // single instruction
-                    (0x03 << QUADSPI_CCR_INSTRUCTION_Pos)); // Read Data
+                    (CCR_READ_DATA << QUADSPI_CCR_INSTRUCTION_Pos));
     QUADSPI->AR = 0;
   
     QUADSPI->CR |= QUADSPI_CR_EN;
@@ -128,9 +127,10 @@ void QUADSPI_IRQHandler(void)
 void qspi_erase_all(void)
     {
         // Send 'enable writes' command.
-    qspi_indirect_write(0x06);
-    qspi_indirect_write(0xC7);
-    while ( QUADSPI->SR & QUADSPI_SR_BUSY ) {};
+    qspi_indirect_write(CCR_WRITE_ENABLE);
+    qspi_indirect_write(CCR_CHIP_ERASE);
+    while ( QUADSPI->SR & QUADSPI_SR_BUSY )
+        ;
         // Disable the peripheral once the transaction is complete.
     QUADSPI->CR  &= ~( QUADSPI_CR_EN );
     qspi_memory_mode(2);
@@ -139,8 +139,9 @@ void qspi_erase_all(void)
 // Erase a 64KB block. Block address = (bnum * 0x10000) 0..255
 void qspi_erase_block( uint32_t bnum )
     {
+    QUADSPI->CR  &= ~( QUADSPI_CR_EN );
         // Send 'enable writes' command.
-    qspi_indirect_write(0x06);
+    qspi_indirect_write(CCR_WRITE_ENABLE);
         // Erase the sector, and wait for the operation to complete.
     QUADSPI->CCR = ((0 << QUADSPI_CCR_FMODE_Pos) |  // Indirect write
                     (0 << QUADSPI_CCR_DMODE_Pos) |  // No data
@@ -149,11 +150,12 @@ void qspi_erase_block( uint32_t bnum )
                     (1 << QUADSPI_CCR_ADMODE_Pos) | // Single line
                     (1 << QUADSPI_CCR_IMODE_Pos));  // Single line
     QUADSPI->CR  |=  ( QUADSPI_CR_EN );
-        // 0xD8 is the "sector erase" command.
-    QUADSPI->CCR |=  ( 0xD8 << QUADSPI_CCR_INSTRUCTION_Pos );
+        // Block Erase (64KB)
+    QUADSPI->CCR |=  ( CCR_BLOCK_ERASE << QUADSPI_CCR_INSTRUCTION_Pos );
         // The address is equal to the sector number * 4KB.
     QUADSPI->AR   =  ( bnum * 0x10000 );
-    while ( QUADSPI->SR & QUADSPI_SR_BUSY ) {};
+    while ( QUADSPI->SR & QUADSPI_SR_BUSY )
+        ;
         // Disable the peripheral once the transaction is complete.
     QUADSPI->CR  &= ~( QUADSPI_CR_EN );
     qspi_memory_mode(2);
@@ -163,7 +165,7 @@ void qspi_erase_block( uint32_t bnum )
 void qspi_erase_sector( uint32_t snum )
     {
         // Send 'enable writes' command.
-    qspi_indirect_write(0x06);
+    qspi_indirect_write(CCR_WRITE_ENABLE);
         // Erase the sector, and wait for the operation to complete.
     QUADSPI->CCR = ((0 << QUADSPI_CCR_FMODE_Pos) |  // Indirect write
                     (0 << QUADSPI_CCR_DMODE_Pos) |  // No data
@@ -172,15 +174,15 @@ void qspi_erase_sector( uint32_t snum )
                     (1 << QUADSPI_CCR_ADMODE_Pos) | // Single line
                     (1 << QUADSPI_CCR_IMODE_Pos));  // Single line
     QUADSPI->CR  |=  ( QUADSPI_CR_EN );
-        // 0x20 is the "sector erase" command.
-    QUADSPI->CCR |=  ( 0x20 << QUADSPI_CCR_INSTRUCTION_Pos );
+        // Sector Erase (4KB)
+    QUADSPI->CCR |=  ( CCR_SECTOR_ERASE << QUADSPI_CCR_INSTRUCTION_Pos );
         // The address is equal to the sector number * 4KB.
     QUADSPI->AR   =  ( snum * 0x1000 );
     while ( QUADSPI->SR & QUADSPI_SR_BUSY )
         ;
         // Disable the peripheral once the transaction is complete.
     QUADSPI->CR  &= ~( QUADSPI_CR_EN );
-    qspi_memory_mode(1);
+    qspi_memory_mode(2);
     }
 
 void qspi_memory_mode(uint8_t w)
@@ -189,36 +191,44 @@ void qspi_memory_mode(uint8_t w)
     // 3 "dummy cycles" with Quad I/O "fast read" instructions by
     // default, which allows up to 84MHz communication speed.
     // Maps to 0x90000000
+    
+        // if busy, clear busy first
+    while (QUADSPI->SR & QUADSPI_SR_BUSY)
+        QUADSPI->CR |= QUADSPI_CR_ABORT;        
+
     QUADSPI->CR  &= ~( QUADSPI_CR_EN );
     QUADSPI->DLR = 0;
     switch(w)
         {
         case 4:     // 0x0F0C_2DEB write Status Regoister 2 0x02
+                    // Fast Read Quad I/O
             QUADSPI->CCR = ((3 << QUADSPI_CCR_FMODE_Pos) |  // Memory-mapped mode
                             (3 << QUADSPI_CCR_DMODE_Pos) |  // Quad data
                             (3 << QUADSPI_CCR_DCYC_Pos) |   // 3 delays
                             (2 << QUADSPI_CCR_ADSIZE_Pos) | // 24 bit address
                             (3 << QUADSPI_CCR_ADMODE_Pos) | // Quad address
                             (1 << QUADSPI_CCR_IMODE_Pos) |  // 1 line instruction
-                            (0xEB << QUADSPI_CCR_INSTRUCTION_Pos)); // Fast Read Quad I/O
+                            (CCR_FAST_READ_QUAD << QUADSPI_CCR_INSTRUCTION_Pos));
             break;
         case 2:     // 0x0E10_29BB
+                    // Fast read dual I/O
             QUADSPI->CCR = ((3 << QUADSPI_CCR_FMODE_Pos) |  // Memory-mapped mode
                             (2 << QUADSPI_CCR_DMODE_Pos) |  // Dual data
                             (4 << QUADSPI_CCR_DCYC_Pos) |   // 4 delays
                             (2 << QUADSPI_CCR_ADSIZE_Pos) | // 24 bit address
                             (2 << QUADSPI_CCR_ADMODE_Pos) | // Dual address
                             (1 << QUADSPI_CCR_IMODE_Pos) |  // single instruction
-                            (0xBB << QUADSPI_CCR_INSTRUCTION_Pos)); // Fast read
+                            (FAST_READ_DUAL << QUADSPI_CCR_INSTRUCTION_Pos)); 
             break;
         default:    // 0x0D00_2503
+                    // Read Data single I/O
             QUADSPI->CCR = ((3 << QUADSPI_CCR_FMODE_Pos) |  // Memory-mapped mode
                             (1 << QUADSPI_CCR_DMODE_Pos) |  // Singe data
                             (0 << QUADSPI_CCR_DCYC_Pos ) |  // no delay
                             (2 << QUADSPI_CCR_ADSIZE_Pos) | // 24 bit address
                             (1 << QUADSPI_CCR_ADMODE_Pos) | // single address
                             (1 << QUADSPI_CCR_IMODE_Pos)|   // single instruction
-                            (0x03 << QUADSPI_CCR_INSTRUCTION_Pos)); // Read Data
+                            (CCR_READ_DATA << QUADSPI_CCR_INSTRUCTION_Pos)); 
             break;
         }
     QUADSPI->CR  |=  ( QUADSPI_CR_EN );
@@ -227,6 +237,11 @@ void qspi_memory_mode(uint8_t w)
 void qspi_indirect_read(uint8_t command, uint8_t receiveBuffer[], uint32_t length) 
     {
     uint32_t counter = 0x00;
+    GPIOA->BSRR = GPIO_PIN_4;       // set high
+        // if busy, clear busy first
+    while (QUADSPI->SR & QUADSPI_SR_BUSY)
+        QUADSPI->CR |= QUADSPI_CR_ABORT;        
+
         // Disable qspi to configure
     QUADSPI->CR &= ~(QUADSPI_CR_EN);
         // Clear all flags
@@ -243,12 +258,12 @@ void qspi_indirect_read(uint8_t command, uint8_t receiveBuffer[], uint32_t lengt
                     (0 << QUADSPI_CCR_ADSIZE_Pos) | // 8 bit address
                     (0 << QUADSPI_CCR_ADMODE_Pos) | // No address
                     (1 << QUADSPI_CCR_IMODE_Pos));  // single instruction line
-                       // fmode imode admode abmode dcyc  dmode
     QUADSPI->CR |= (QUADSPI_CR_EN);
     
         //writing instruction starts communication
     QUADSPI->CCR |= (command << QUADSPI_CCR_INSTRUCTION_Pos); 
     
+    GPIOA->BRR = GPIO_PIN_4;       // set low
         //wait while data arrives to FIFO
     while (counter < length) 
         {
@@ -256,13 +271,15 @@ void qspi_indirect_read(uint8_t command, uint8_t receiveBuffer[], uint32_t lengt
             ; 
         receiveBuffer[counter++] = *(uint8_t*)(&QUADSPI->DR);
         }
-    while (QUADSPI->SR & QUADSPI_SR_BUSY)   // Wait for the transaction to complete, and disable the peripheral.
-//        receiveBuffer[counter] = *(uint8_t*)(&QUADSPI->DR);
-    QUADSPI->CR &= ~(QUADSPI_CR_EN);
+    qspi_memory_mode(2);
     }
     
 void qspi_indirect_write(uint8_t command) 
     {
+        // if busy, clear busy first
+    while (QUADSPI->SR & QUADSPI_SR_BUSY)
+        QUADSPI->CR |= QUADSPI_CR_ABORT;        
+
     QUADSPI->CR &= ~(QUADSPI_CR_EN); // Disable qspi to configure
 
     QUADSPI->FCR = QUADSPI_FCR_CTOF |
@@ -284,13 +301,17 @@ void qspi_indirect_write(uint8_t command)
         // Wait for the transaction to complete
     while (QUADSPI->SR & QUADSPI_SR_BUSY)   
         ;
-    QUADSPI->CR &= ~(QUADSPI_CR_EN);
+    qspi_memory_mode(2);
     }
     
     // QSPI 0xA0001000
 void qspi_read(uint32_t addr, uint8_t receiveBuffer[], uint32_t length) 
     {
     uint32_t counter = 0;
+        // if busy, clear busy first
+    while (QUADSPI->SR & QUADSPI_SR_BUSY)
+        QUADSPI->CR |= QUADSPI_CR_ABORT;        
+
         // Disable qspi to configure
     QUADSPI->CR &= ~(QUADSPI_CR_EN);
         // Clear all flags
@@ -308,7 +329,7 @@ void qspi_read(uint32_t addr, uint8_t receiveBuffer[], uint32_t length)
         // 4 bytes to read
     QUADSPI->CR |= (QUADSPI_CR_EN);
         //writing instruction starts communication
-    QUADSPI->CCR |= (0x03 << QUADSPI_CCR_INSTRUCTION_Pos); 
+    QUADSPI->CCR |= (CCR_READ_DATA << QUADSPI_CCR_INSTRUCTION_Pos); 
     QUADSPI->AR = addr;     // address to start
 
     while (counter < length) 
@@ -317,25 +338,30 @@ void qspi_read(uint32_t addr, uint8_t receiveBuffer[], uint32_t length)
         ;        // wait while data arrives to FIFO
         receiveBuffer[counter++] = *(uint8_t*)(&QUADSPI->DR);
         }
-    QUADSPI->CR &= ~(QUADSPI_CR_EN);
+    qspi_memory_mode(2);
     }
     
   void qspi_write_page(uint32_t address, uint8_t Buffer[], uint32_t length) 
     {
     uint32_t count = 0;
+        // if busy, clear busy first
+    while (QUADSPI->SR & QUADSPI_SR_BUSY)
+        QUADSPI->CR |= QUADSPI_CR_ABORT;        
+
     QUADSPI->CR &= ~(QUADSPI_CR_EN); // Disable qspi to configure
 
     QUADSPI->FCR = QUADSPI_FCR_CTOF |
                    QUADSPI_FCR_CSMF | 
                    QUADSPI_FCR_CTCF | 
                    QUADSPI_FCR_CTEF; // Clear all flags
+                         // Page Program
     QUADSPI->CCR = ((0 << QUADSPI_CCR_FMODE_Pos) |  // Indirect write
                     (1 << QUADSPI_CCR_DMODE_Pos) |  // Single line
                     (0 << QUADSPI_CCR_DCYC_Pos ) |  // No dummy
                     (2 << QUADSPI_CCR_ADSIZE_Pos) | // 24 bit address
                     (1 << QUADSPI_CCR_ADMODE_Pos) | // Single line
                     (1 << QUADSPI_CCR_IMODE_Pos) |  // Single line
-                    (0x02 << QUADSPI_CCR_INSTRUCTION_Pos)); // Page Program
+                    (CCR_PAGE_PROGRAM << QUADSPI_CCR_INSTRUCTION_Pos));
     QUADSPI->CR |= (8 << QUADSPI_CR_FTHRES_Pos);
     QUADSPI->DLR = length - 1;
     QUADSPI->AR = address;
@@ -345,10 +371,10 @@ void qspi_read(uint32_t addr, uint8_t receiveBuffer[], uint32_t length)
         *(uint8_t*)(&QUADSPI->DR) = Buffer[count++];
         while ((QUADSPI->SR & QUADSPI_SR_FTF) == 0);
         }
+            // Wait for the transaction to complete
     while (QUADSPI->SR & QUADSPI_SR_BUSY)
-        ; // Wait for the transaction to complete
+        ;
     QUADSPI->CR &= ~(QUADSPI_CR_EN);
     
-//    qspi_memory_mode(1);
+    qspi_memory_mode(2);
     }
-
