@@ -84,7 +84,16 @@ int ADC_rd(uint8_t chan)
         ;
     return((int)ADC->DR);
     }
-    
+
+float ADC_temp(uint16_t adc, uint16_t vref)
+    {
+    float a = (float)(TEMPSENSOR_CAL2_TEMP - TEMPSENSOR_CAL1_TEMP) /
+       (float)(*TEMPSENSOR_CAL2_ADDR - *TEMPSENSOR_CAL1_ADDR);
+    float b = (float)adc * (float)vref/(float)TEMPSENSOR_CAL_VREFANALOG;
+    return (float)(a * (b - (float)*TEMPSENSOR_CAL1_ADDR) +
+           (float)TEMPSENSOR_CAL1_TEMP);
+    }
+        
 // ADC
     // ISR interrupt and status register [0x00]
         // JQOVF: Injected context queue overflow
@@ -362,5 +371,3 @@ void ADC5_Init(void)
 //  ADC5->IER |= ADC_IER_EOSIE;
 //  NVIC_EnableIRQ(ADC5_IRQn);
   }
-
-
