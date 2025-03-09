@@ -2,6 +2,7 @@
 
 void ADC_Cal(uint8_t chan);
 int ADC_rd(uint8_t chan);
+float ADC_temp(uint16_t adc, uint16_t vref);
 void ADC1_Init(void);
 void ADC2_Init(void);
 void ADC3_Init(void);
