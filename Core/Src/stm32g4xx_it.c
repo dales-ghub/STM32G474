@@ -1,23 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file    stm32g4xx_it.c
-  * @brief   Interrupt Service Routines.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "board.h"
 #include "stm32g4xx_it.h"
@@ -25,35 +5,6 @@
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN TD */
-
-/* USER CODE END TD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
@@ -262,11 +213,14 @@ void DMA2_Channel2_IRQHandler(void)
   DMA2->IFCR = (DMA_ISR_TCIF2 | DMA_ISR_HTIF2 | DMA_ISR_TCIF2 | DMA_ISR_GIF2);
   DMA2_Channel2->CCR = 0;
   }
+
+uint8_t SPI2_DMAx = 0;
   
 void DMA2_Channel3_IRQHandler(void)
   {
   DMA2->IFCR = (DMA_ISR_TCIF3 | DMA_ISR_HTIF3 | DMA_ISR_TCIF3 | DMA_ISR_GIF3);
   DMA2_Channel3->CCR = 0;
+  SPI2_DMAx = 1;
   }
   
 void DMA2_Channel4_IRQHandler(void)
@@ -440,16 +394,11 @@ void SPI1_IRQHandler(void)
 void TIM2_IRQHandler(void)
   {
   TIM2->SR &= ~TIM_SR_UIF;
-  GPIOB->BRR = (uint32_t)TEST_Out;  // TEST_Out
   }
   
 void TIM3_IRQHandler(void)
   {
   TIM3->SR &= ~TIM_SR_UIF;  // clear irqs
-  if(GPIOB->IDR & (uint32_t)TEST_Out) // TEST_Out
-    GPIOB->BRR = (uint32_t)TEST_Out;  // TEST_Out
-  else
-    GPIOB->BSRR = (uint32_t)TEST_Out; // TEST_Out
   }
   
 void TIM4_IRQHandler(void)
@@ -563,4 +512,3 @@ void USB_LP_IRQHandler(void)
   {
   HAL_PCD_IRQHandler(&hpcd_USB_FS);
   }
-
